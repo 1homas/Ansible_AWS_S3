@@ -1,0 +1,80 @@
+---
+- name: Sync AWS S3 Bucket with Local Directory Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+    bucket_sync_src: files      # path; no trailing `/`
+    permission: public-read     # [ private | public-read | public-read-write | authenticated-read | aws-exec-read | bucket-owner-read | bucket-owner-full-control ]
+  tasks:
+
+
+  - name: AWS Environment is Valid
+    ansible.builtin.include_tasks: tasks/aws/environment_valid.yaml
+    tags: environment,setup
+
+  - name: Sync 'files' Directory to the S3 Bucket '{{ bucket_name }}'
+    block:
+    - name: Confirm Sync
+      ansible.builtin.pause:
+        prompt: Sync '{{ bucket_sync_src }}' to the S3 Bucket '{{ bucket_name }}' (y/n)?
+      register: result
+    - ansible.builtin.set_fact:
+        is_sync_confirmed: "{{ result.user_input[0] | lower == 'y' }}"
+    - ansible.builtin.debug: var=is_sync_confirmed
+    - name: Syncing Files ...
+      when: is_sync_confirmed
+      community.aws.s3_sync:
+        bucket: "{{ bucket_name }}"
+        file_root: "{{ bucket_sync_src }}"   # directory path for synchronization
+        permission: "{{ permission }}"
+        # mime_map:
+        #   .yml: application/text
+        #   .yaml: application/text
+        #   .json: application/text
+        # key_prefix: config_files/web
+        # file_change_strategy: force   # [ force | checksum | *date_size* ]
+        # cache_control: "public, max-age=31536000"
+        # storage_class: "GLACIER"      # [ *STANDARD* | REDUCED_REDUNDANCY | STANDARD_IA | ONEZONE_IA | INTELLIGENT_TIERING | GLACIER | DEEP_ARCHIVE | OUTPOSTS ]
+        # include: "*"          # Shell pattern-style file matching
+        # exclude: "*.txt,.*"   # Shell pattern-style file matching
+      register: s3_sync
+    # - ansible.builtin.debug: var=s3_sync
+
+    #--------------------------------------------------------------------------
+    # `s3_sync` Output Example:
+    #
+    # s3_sync:
+    #   changed: false
+    #   failed: false
+    #   filelist_actionable: []
+    #   filelist_s3:
+    #   - bytes: 766
+    #     chopped_path: favicon.ico
+    #     encoding: null
+    #     fullpath: files/favicon.ico     # local directory
+    #     mime_type: image/x-icon
+    #     modified_epoch: 1422932916
+    #     s3_path: favicon.ico
+    #--------------------------------------------------------------------------
+  - name: AWS S3 List {{ bucket_name }}
+    delegate_to: localhost
+    vars:
+      head: ['modified_epoch','mime_type','bytes','s3_path']   # 'fullpath','encoding'
+      rows: "{{ s3_sync.filelist_s3 }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+
+
+  - name: Try your bucket!
+    ansible.builtin.debug:
+      msg: |
+        Try your bucket!
+        http://{{ bucket_name }}.s3-website-{{ lookup('env', 'AWS_REGION') }}.amazonaws.com
+        https://{{ bucket_name }}.s3.amazonaws.com
+        https://{{ bucket_name }}.s3.amazonaws.com/index.html
+        https://{{ bucket_name }}.s3.us-west-1.amazonaws.com
+        https://{{ bucket_name }}.s3-us-west-1.amazonaws.com
+
+
+...

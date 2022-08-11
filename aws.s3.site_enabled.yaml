@@ -1,0 +1,63 @@
+---
+- name: Configure AWS S3 Bucket as a Website Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+  tasks:
+
+
+  - name: Configure an s3 bucket as a website with index and error pages
+    community.aws.s3_website:
+      name: "{{ bucket_name }}"
+      state: present        # `absent` to disable
+      # suffix: index.html    # appended to a directory request; No trailing '/'!
+      error_key: 404.html
+    register: s3_website
+  - ansible.builtin.debug: var=s3_website
+
+
+  - name: Try your bucket!
+    ansible.builtin.debug:
+      msg: |
+        Try your bucket!
+        http://{{ bucket_name }}.s3-website-{{ lookup('env', 'AWS_REGION') }}.amazonaws.com
+        https://{{ bucket_name }}.s3.amazonaws.com
+        https://{{ bucket_name }}.s3.amazonaws.com/index.html
+        https://{{ bucket_name }}.s3.us-west-1.amazonaws.com
+        https://{{ bucket_name }}.s3-us-west-1.amazonaws.com
+
+
+  - name: Put index.html Page
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      src: files/indexes/Amazon_S3_Bucket_Listing.original.index.html
+      object: index.html
+      mode: put
+      permission: public-read
+    register: put
+  # - ansible.builtin.debug: var=put
+
+
+  #
+  # Example website response:
+  #
+  # website:
+  #   changed: true
+  #   failed: false
+  #   index_document:
+  #     suffix: index.html
+  #   response_metadata:
+  #     host_id: Iapih5q0b6T6KdOdXwJbBDCYOPOr6dKphMancsooPj6Rj0ebKXtoOnocVAd1bwSGOZKURa/3H2zVjIkdZMJ6pQ==
+  #     http_headers:
+  #       content-type: application/xml
+  #       date: Sun, 07 Aug 2022 15:46:13 GMT
+  #       server: AmazonS3
+  #       transfer-encoding: chunked
+  #       x-amz-id-2: Iapih5q0b6T6KdOdXwJbBDCYOPOr6dKphMancsooPj6Rj0ebKXtoOnocVAd1bwSGOZKURa/3H2zVjIkdZMJ6pQ==
+  #       x-amz-request-id: P94C4BFF4AFQX6EN
+  #     http_status_code: 200
+  #     request_id: P94C4BFF4AFQX6EN
+  #     retry_attempts: 0
+
+...

@@ -1,0 +1,50 @@
+---
+- name: Delete AWS S3 Bucket
+  gather_facts: no
+  hosts: localhost
+  tasks:
+
+  - name: AWS Environment is Valid
+    ansible.builtin.include_tasks: tasks/aws/environment_valid.yaml
+    tags: environment,setup
+
+  - name: Get AWS S3 Buckets
+    community.aws.aws_s3_bucket_info:
+    register: s3_buckets
+    tags: s3, buckets, show
+
+  - name: Show buckets
+    when: s3_buckets is defined and s3_buckets | count > 0
+    delegate_to: localhost
+    vars:
+      rows: "{{ s3_buckets.buckets }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+    tags: s3, buckets, show
+
+  - name: Confirm AWS S3 Bucket Name
+    block:
+    - ansible.builtin.pause:
+        prompt: Which AWS S3 bucket do you want to delete?
+      register: result
+    - ansible.builtin.set_fact:
+        bucket_name: "{{ result.user_input | trim }}"
+
+  - name: Confirm Force Delete *ALL* resources in the bucket '{{ bucket_name }}'
+    block:
+    - name: Confirm Force Delete
+      ansible.builtin.pause:
+        prompt: Do you really want to force delete everything in '{{ bucket_name }}' (y/n)?
+      register: result
+    - ansible.builtin.set_fact:
+        is_force_confirmed: "{{ result.user_input is truthy }}" # | lower | trim in ['y','t']
+    - ansible.builtin.debug: var=is_force_confirmed
+    - name: Force Remove AWS S3 Bucket '{{ bucket_name }}' and *ALL* Contents
+      when: is_force_confirmed
+      amazon.aws.s3_bucket:
+        name: "{{ bucket_name }}"
+        state: absent
+        force: "{{ is_force_confirmed }}"
+
+
+...

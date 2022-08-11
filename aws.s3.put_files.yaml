@@ -1,0 +1,53 @@
+---
+- name: PUT file(s) in AWS S3 Bucket Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+    files:
+    - index.html
+    - favicon.ico
+  tasks:
+
+
+  - name: Simple PUT operation
+    loop: "{{ files }}"
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      src: files/{{ item }}
+      object: "{{ item }}"
+      mode: put
+      permission: public-read
+      # permission:
+      # - private
+      # - public-read
+      # - public-read-write
+      # - authenticated-read for a bucket or private
+      # - public-read
+      # - public-read-write
+      # - aws-exec-read
+      # - authenticated-read
+      # - bucket-owner-read
+      # - bucket-owner-full-control
+    register: put
+  - ansible.builtin.debug: var=put
+
+
+  - name: List keys simple
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      mode: list
+      # prefix: /my/desired/
+      # marker: /my/desired/0023.txt
+      # max_keys: 472
+    register: get
+  - ansible.builtin.debug: var=get
+
+
+  # - name: PUT operation from a rendered template
+  #   amazon.aws.aws_s3:
+  #     bucket: mybucket
+  #     object: /object.yaml
+  #     content: "{{ lookup('template', 'templates/object.yaml.j2') }}"
+  #     mode: put
+

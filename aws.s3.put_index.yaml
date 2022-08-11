@@ -1,0 +1,25 @@
+---
+- name: Configure AWS S3 Bucket as a Website Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+  tasks:
+
+
+  - name: Put index.html Page
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      src: files/indexes/Amazon_S3_Bucket_Listing.original.index.html
+      object: index.html
+      mode: put
+      permission: public-read
+    register: put
+  # - ansible.builtin.debug: var=put
+
+
+  - name: Try Your Bucket!
+    ansible.builtin.debug:
+      msg: |
+        Try your bucket!
+        https://{{ bucket_name }}.s3.amazonaws.com/index.html

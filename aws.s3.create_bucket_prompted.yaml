@@ -1,0 +1,155 @@
+---
+- name: Create AWS S3 (Simple Storage Service) Bucket Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    permission: public-read     # [ private | public-read | public-read-write | authenticated-read | aws-exec-read | bucket-owner-read | bucket-owner-full-control ]
+  tasks:
+
+
+  - name: AWS Environment is Valid
+    ansible.builtin.include_tasks: tasks/aws/environment_valid.yaml
+    tags: environment,setup
+
+  - name: Get AWS S3 Buckets
+    community.aws.aws_s3_bucket_info:
+    register: s3_buckets
+    tags: s3, buckets, show
+
+  - name: Show All Existing Buckets
+    when: s3_buckets is defined and s3_buckets | count > 0
+    delegate_to: localhost
+    vars:
+      rows: "{{ s3_buckets.buckets }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+    tags: s3, buckets, show
+
+  - name: Confirm AWS S3 Bucket Name
+    block:
+    - ansible.builtin.pause:
+        prompt: What is the name [a-zA-Z0-9-] of the AWS S3 bucket to create?
+      register: result
+    - ansible.builtin.set_fact:
+        bucket_name: "{{ result.user_input | trim }}"
+
+  - name: Confirm AWS S3 Bucket Permissions
+    block:
+    - ansible.builtin.pause:
+        prompt: |
+          Permission options (pick one):
+            private
+            public-read
+            public-read-write
+            authenticated-read
+            aws-exec-read
+            bucket-owner-read
+            bucket-owner-full-control
+          What are the permissions for the bucket?
+      register: result
+    - ansible.builtin.set_fact:
+        permission: "{{ result.user_input | trim }}"
+
+  - name: Create an Empty Bucket
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"   # [a-zA-Z0-9-]
+      mode: create
+      permission: "{{ permission }}"
+      tags:
+        Name: "{{ bucket_name }}"
+        product: "S3"
+        project: "{{ bucket_name }}"
+        start_date: "{{ ansible_date_time.date }}"
+    register: s3_bucket
+    tags: s3, bucket, create
+  # - ansible.builtin.debug: var=s3_bucket
+
+
+  - name: Confirm Website Creation
+    block:
+    - ansible.builtin.pause:
+        prompt: Would you like an AWS website for '{{ bucket_name }}' (y/n)?
+      register: result
+    - ansible.builtin.set_fact:
+        is_site_confirmed: "{{ result.user_input[0] | lower == 'y' }}"
+
+  - name: Configure an s3 bucket as a website with index and error pages
+    when: is_site_confirmed is defined and is_site_confirmed
+    community.aws.s3_website:
+      name: "{{ bucket_name }}"
+      state: present
+    register: s3_website
+  # - ansible.builtin.debug: var=s3_website
+
+  - name: Test Website for Bucket '{{ bucket_name }}'
+    when: is_site_confirmed is defined and is_site_confirmed
+    ansible.builtin.assert:
+      that: s3_website.response_metadata.http_status_code == 200
+
+
+  - name: Try your bucket!
+    when: is_site_confirmed is defined and is_site_confirmed
+    ansible.builtin.debug:
+      msg: |
+        Try your bucket!
+        http://{{ bucket_name }}.s3-website-{{ lookup('env', 'AWS_REGION') }}.amazonaws.com
+        https://{{ bucket_name }}.s3.amazonaws.com
+        https://{{ bucket_name }}.s3.amazonaws.com/index.html
+        https://{{ bucket_name }}.s3.us-west-1.amazonaws.com
+        https://{{ bucket_name }}.s3-us-west-1.amazonaws.com
+
+
+  - name: Sync 'files' Directory to the S3 Bucket '{{ bucket_name }}'
+    block:
+    - name: Confirm Sync
+      ansible.builtin.pause:
+        prompt: Sync 'files' Directory to the S3 Bucket '{{ bucket_name }}' (y/n)?
+      register: result
+    - ansible.builtin.set_fact:
+        is_sync_confirmed: "{{ result.user_input[0] | lower == 'y' }}"
+    - ansible.builtin.debug: var=is_sync_confirmed
+    - name: Syncing Files ...
+      when: is_sync_confirmed
+      community.aws.s3_sync:
+        bucket: "{{ bucket_name }}"
+        file_root: files   # File/directory path for synchronization
+        permission: public-read     # [ private | public-read | public-read-write | authenticated-read | aws-exec-read | bucket-owner-read | bucket-owner-full-control ]
+        # mime_map:
+        #   .yml: application/text
+        #   .yaml: application/text
+        #   .json: application/text
+        # key_prefix: config_files/web
+        # file_change_strategy: force   # [ force | checksum | *date_size* ]
+        # cache_control: "public, max-age=31536000"
+        # storage_class: "GLACIER"      # [ *STANDARD* | REDUCED_REDUNDANCY | STANDARD_IA | ONEZONE_IA | INTELLIGENT_TIERING | GLACIER | DEEP_ARCHIVE | OUTPOSTS ]
+        # include: "*"          # Shell pattern-style file matching
+        # exclude: "*.txt,.*"   # Shell pattern-style file matching
+      register: s3_sync
+    # - ansible.builtin.debug: var=s3_sync
+
+    #--------------------------------------------------------------------------
+    # `s3_sync` Output Example:
+    #
+    # s3_sync:
+    #   changed: false
+    #   failed: false
+    #   filelist_actionable: []
+    #   filelist_s3:
+    #   - bytes: 766
+    #     chopped_path: favicon.ico
+    #     encoding: null
+    #     fullpath: files/favicon.ico     # local directory
+    #     mime_type: image/x-icon
+    #     modified_epoch: 1422932916
+    #     s3_path: favicon.ico
+    #--------------------------------------------------------------------------
+  - name: AWS S3 List {{ bucket_name }}
+    delegate_to: localhost
+    vars:
+      head: ['modified_epoch','mime_type','bytes','s3_path']   # 'fullpath','encoding'
+      rows: "{{ s3_sync.filelist_s3 }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+
+
+...

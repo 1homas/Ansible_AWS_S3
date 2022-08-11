@@ -1,0 +1,103 @@
+---
+- name: GET a file from an AWS S3 Bucket Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+    dir_downloads: downloads
+    files:
+    - index.html
+    - favicon.ico
+    - ise-apply-CSCwa47133_3.1.0.518_patch1-SPA.tar.gz
+  tasks:
+
+
+  - name: Create {{ downloads }} Directory
+    ansible.builtin.file:
+      dest: "{{ dir_downloads }}"
+      state: directory
+    register: dir_status
+  - ansible.builtin.assert:
+      that:
+      - dir_status.failed == false
+      - dir_status.state == 'directory'
+  - ansible.builtin.debug: var=dir_status
+
+
+  - name: GET Files
+    loop: "{{ files }}"
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      mode: get
+      object: "{{ item }}"
+      dest: "{{ dir_downloads }}/{{ item }}"
+      # overwrite: always
+    register: get
+  - ansible.builtin.debug: var=get
+
+
+  - name: Show Downloaded Files Summary
+    delegate_to: localhost
+    vars:
+      maxw: 40
+      head: ['item','changed','failed','msg',]
+      rows: "{{ get.results }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+
+
+  - name: Get Files in Directory
+    ansible.builtin.find:
+      paths: "{{ dir_downloads }}"
+    register: listing
+  - ansible.builtin.debug: var=listing
+
+  # Example Files Listing :
+  #
+  # listing:
+  #   changed: false
+  #   examined: 3
+  #   failed: false
+  #   files:
+  #   - atime: 1659892845.4885411
+  #     ctime: 1659892843.5930495
+  #     dev: 16777232
+  #     gid: 20
+  #     gr_name: staff
+  #     inode: 127326689
+  #     isblk: false
+  #     ischr: false
+  #     isdir: false
+  #     isfifo: false
+  #     isgid: false
+  #     islnk: false
+  #     isreg: true
+  #     issock: false
+  #     isuid: false
+  #     mode: '0644'
+  #     mtime: 1659892843.592548
+  #     nlink: 1
+  #     path: downloads/favicon.ico
+  #     pw_name: thomas
+  #     rgrp: true
+  #     roth: true
+  #     rusr: true
+  #     size: 766
+  #     uid: 501
+  #     wgrp: false
+  #     woth: false
+  #     wusr: true
+  #     xgrp: false
+  #     xoth: false
+  #     xusr: false
+
+  - name: Show Downloads Directory Listing
+    delegate_to: localhost
+    vars:
+      head: ['ctime','gr_name','pw_name','mode','path',]
+      rows: "{{ listing.files }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+
+
+...

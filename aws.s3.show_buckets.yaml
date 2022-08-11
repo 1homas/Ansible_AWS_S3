@@ -1,0 +1,27 @@
+---
+- name: Show AWS S3 Buckets
+  gather_facts: no
+  hosts: localhost
+  tasks:
+
+  - name: AWS Environment is Valid
+    ansible.builtin.include_tasks: tasks/aws/environment_valid.yaml
+    tags: environment,setup
+
+  - name: Get AWS S3 Buckets
+    community.aws.aws_s3_bucket_info:
+    register: s3_buckets
+    tags: s3, buckets, show
+  # - ansible.builtin.debug: var=s3_buckets.buckets
+
+  - name: Show buckets
+    when: s3_buckets is defined and s3_buckets | count > 0
+    delegate_to: localhost
+    vars:
+      rows: "{{ s3_buckets.buckets }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+    tags: s3, buckets, show
+
+
+...

@@ -1,0 +1,21 @@
+---
+- name: Show List of AWS S3 (Simple Storage Service) Bucket Keys (files) Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+  tasks:
+
+
+  - name: List Keys (simple)
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      mode: list
+      # prefix: /my/desired/            # filter by filename
+      # marker: /my/desired/0023.txt    # starting key, for long lists
+      # max_keys: 1000                  # Default: 1000
+    register: list
+  - ansible.builtin.debug: var=list.s3_keys
+
+
+...

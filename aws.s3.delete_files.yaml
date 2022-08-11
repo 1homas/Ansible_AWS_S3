@@ -1,0 +1,36 @@
+---
+- name: Delete file(s) from an AWS S3 Bucket Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  vars:
+    bucket_name: ise-repository
+    files:
+    - css/style.css
+    - img/favicon.png
+    - index.html
+    - index.s3_bucket_listing.html
+  tasks:
+
+
+  - name: Delete Files
+    loop: "{{ files }}"
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      mode: delobj
+      object: "{{ item }}"
+    register: deleted
+  - ansible.builtin.debug: var=deleted
+
+
+  - name: List Keys (simple)
+    amazon.aws.aws_s3:
+      bucket: "{{ bucket_name }}"
+      mode: list
+      # prefix: /my/desired/            # filter by filename
+      # marker: /my/desired/0023.txt    # starting key, for long lists
+      # max_keys: 1000                  # Default: 1000
+    register: list
+  - ansible.builtin.debug: var=list.s3_keys
+
+
+...

@@ -1,0 +1,50 @@
+---
+- name: Disable AWS S3 Bucket Website Playbook
+  gather_facts: yes   # required for ansible_date_time
+  hosts: localhost
+  tasks:
+
+
+  - name: AWS Environment is Valid
+    ansible.builtin.include_tasks: tasks/aws/environment_valid.yaml
+    tags: environment,setup
+
+
+  - name: Get AWS S3 Buckets
+    community.aws.aws_s3_bucket_info:
+    register: s3_buckets
+    tags: s3, buckets, show
+
+
+  - name: Show buckets
+    when: s3_buckets is defined and s3_buckets | count > 0
+    delegate_to: localhost
+    vars:
+      rows: "{{ s3_buckets.buckets }}"
+      temp: "{{ lookup('template', './templates/list_of_dicts.j2') }}"
+    ansible.builtin.shell: "echo '{{ temp }}' > /dev/tty"
+    tags: s3, buckets, show
+
+
+  - name: Confirm AWS S3 Bucket Name
+    block:
+    - ansible.builtin.pause:
+        prompt: Disable (not delete!) the website functionality from which AWS S3 bucket?
+      register: result
+    - ansible.builtin.set_fact:
+        bucket_name: "{{ result.user_input }}"
+
+
+  - name: Disable AWS S3 Bucket Website
+    community.aws.s3_website:
+      name: "{{ bucket_name }}"
+      state: absent        # `absent` to disable
+    register: s3_website
+
+  - ansible.builtin.debug: var=s3_website
+
+  - ansible.builtin.assert:
+      that: s3_website.failed == false
+
+
+...
