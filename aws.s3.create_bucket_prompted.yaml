@@ -144,6 +144,7 @@
     #     s3_path: favicon.ico
     #--------------------------------------------------------------------------
   - name: AWS S3 List {{ bucket_name }}
+    when: is_sync_confirmed is defined and is_sync_confirmed
     delegate_to: localhost
     vars:
       head: ['modified_epoch','mime_type','bytes','s3_path']   # 'fullpath','encoding'
